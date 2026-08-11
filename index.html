@@ -1,3 +1,41 @@
+/* ==================== SYNCHRONISATION GOOGLE SHEETS ==================== */
+const API_URL = "https://script.google.com/macros/s/AKfycbybI0JVie8r3v4RZOCkjm8OrJzDLqgwoiPU-qhWTrLB9rLUDO2KBQmbipK95JuERyaqTQ/exec"; /* ex: https://script.google.com/macros/s/AKf.../exec */
+
+function tablesPourSheet(){
+  return { MEMBRES:state.members, COTISATIONS:state.cotisations, DEPENSES:state.depenses,
+    PROJETS:state.projets, DEMANDES:state.demandes, CODES:state.codes, JOURNAL:state.log };
+}
+function appliquerDonnees(d){
+  if(d.MEMBRES && d.MEMBRES.length) state.members = d.MEMBRES;
+  if(d.COTISATIONS && d.COTISATIONS.length) state.cotisations = d.COTISATIONS.map(c=>({...c,montant:Number(c.montant)||0}));
+  if(d.DEPENSES && d.DEPENSES.length) state.depenses = d.DEPENSES.map(x=>({...x,montant:Number(x.montant)||0}));
+  if(d.PROJETS && d.PROJETS.length) state.projets = d.PROJETS.map(p=>({...p,avancement:Number(p.avancement)||0}));
+  if(d.DEMANDES && d.DEMANDES.length) state.demandes = d.DEMANDES;
+  if(d.CODES && d.CODES.length) state.codes = d.CODES;
+  if(d.JOURNAL && d.JOURNAL.length) state.log = d.JOURNAL;
+}
+let _saveTimer = null;
+function planifierSauvegarde(){
+  if(!API_URL || API_URL.includes("COLLEZ_ICI")) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(sauvegarder, 800);
+}
+async function sauvegarder(){
+  try{
+    await fetch(API_URL, {method:"POST", body: JSON.stringify({action:"saveAll", data: tablesPourSheet()})});
+  }catch(e){ console.warn("Sauvegarde impossible :", e); }
+}
+async function chargerDepuisSheet(){
+  if(!API_URL || API_URL.includes("COLLEZ_ICI")) return;
+  try{
+    const r = await fetch(API_URL); const j = await r.json();
+    if(j.ok && j.data){
+      appliquerDonnees(j.data);
+      if(state.session){ renderPanel(state.ui.tab); renderSideBalance(); }
+      toast("Données chargées depuis Google Sheets.","ok","fa-cloud-arrow-down");
+    }
+  }catch(e){ console.warn("Chargement impossible :", e); }
+}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -1321,7 +1359,7 @@ document.addEventListener("click", e=>{
       const st=statutDemande(d);
       logAction("fa-stamp","gold",`Demande « ${d.objet} » — ${st.txt}`);
       toast("Validation enregistrée : "+st.txt,"ok","fa-stamp");
-      renderPanel("activites"); renderDraftLines(); break; }
+      renderPanel("activites"); renderDraftLines(); planifierSauvegarde(); break; }
     case "quick-msg": { const t=document.getElementById("smsMsg"); if(t){ t.value=el.dataset.msg; t.focus(); } break; }
     case "send-sms": sendAlert("sms"); break;
     case "send-wa": sendAlert("wa"); break;
@@ -1333,7 +1371,7 @@ document.addEventListener("click", e=>{
     case "revoke-code":
       openConfirm("Révoquer le code","Ce code ne permettra plus de se connecter. Cette action est définitive.",()=>{
         state.codes = state.codes.filter(c=>c.code!==el.dataset.code);
-        toast("Code révoqué.","ok","fa-ban"); closeModal(); renderPanel("codes"); });
+        toast("Code révoqué.","ok","fa-ban"); closeModal(); renderPanel("codes"); planifierSauvegarde(); });
       break;
 
     /* Config */
@@ -1342,7 +1380,7 @@ document.addEventListener("click", e=>{
         const num=state.numero, sess=state.session;
         state=seed(); state.numero=num; state.session=sess;
         toast("Données de démonstration rechargées.","ok","fa-rotate");
-        closeModal(); goTo("dashboard"); });
+        closeModal(); goTo("dashboard"); planifierSauvegarde(); });
       break;
 
     case "modal-close": closeModal(); break;
@@ -1405,7 +1443,7 @@ document.addEventListener("submit", e=>{
       state.draft={objet:"",demandeur:"Chef de projet",projet:"",lignes:[{article:"",unite:"",cout:"",qte:""}]};
       logAction("fa-file-signature","gold",`Nouvelle demande — ${d.objet} (${fmt(demTotal(d))})`);
       toast("Demande soumise : "+fmt(demTotal(d))+" — en attente de validation.","ok","fa-paper-plane");
-      renderPanel("activites"); renderDraftLines(); break; }
+      renderPanel("activites"); renderDraftLines(); planifierSauvegarde(); break; }
     case "formConfig": {
       state.numero=v("cfgNum");
       localStorage.setItem("falalaNumero",state.numero);
@@ -1463,6 +1501,7 @@ function fallbackCopy(t,done){
 
 /* ---------- Démarrage ---------- */
 document.getElementById("loginCode").addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault(); doLogin(e.target.value.trim());} });
+chargerDepuisSheet();
 </script>
 </body>
 </html>
