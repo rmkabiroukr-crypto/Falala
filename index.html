@@ -208,7 +208,22 @@ function tablesPourSheet(){return{MEMBRES:state.members,COTISATIONS:state.cotisa
 function appliquerDonnees(d){if(d.MEMBRES&&d.MEMBRES.length)state.members=d.MEMBRES;if(d.COTISATIONS&&d.COTISATIONS.length)state.cotisations=d.COTISATIONS.map(function(c){return Object.assign({},c,{montant:Number(c.montant)||0})});if(d.DEPENSES&&d.DEPENSES.length)state.depenses=d.DEPENSES.map(function(x){return Object.assign({},x,{montant:Number(x.montant)||0})});if(d.PROJETS&&d.PROJETS.length)state.projets=d.PROJETS.map(function(p){return Object.assign({},p,{avancement:Number(p.avancement)||0})});if(d.DEMANDES&&d.DEMANDES.length)state.demandes=d.DEMANDES;if(d.CODES&&d.CODES.length)state.codes=d.CODES;if(d.JOURNAL&&d.JOURNAL.length)state.log=d.JOURNAL}
 var _saveTimer=null;function planifierSauvegarde(){if(!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1)return;clearTimeout(_saveTimer);_saveTimer=setTimeout(sauvegarder,800)}
 function sauvegarder(){if(!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1)return;fetch(API_URL,{method:"POST",body:JSON.stringify({action:"saveAll",data:tablesPourSheet()})}).then(function(r){if(r.ok)console.log("✅ Sauvegardé")}).catch(function(e){console.warn("❌ Sauvegarde impossible",e)})}
-function chargerDepuisSheet(){if(!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1)return;fetch(API_URL).then(function(r){return r.json()}).then(function(j){if(j.ok&&j.data){appliquerDonnees(j.data);if(j.data.CONNEXIONS)state.connexions=j.data.CONNEXIONS;if(state.session){renderPanel(state.ui.tab);renderSideBalance();renderPresence()}toast("Données chargées depuis Google Sheets.","ok","fa-cloud-arrow-down")}}).catch(function(e){console.warn("Chargement impossible :",e)})}
+function chargerDepuisSheet(){
+  if(!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1)return;
+  fetch(API_URL).then(function(r){return r.json()}).then(function(j){
+    if(j.ok&&j.data){
+      appliquerDonnees(j.data);
+      if(j.data.CONNEXIONS)state.connexions=j.data.CONNEXIONS;
+      if(state.session){renderPanel(state.ui.tab);renderSideBalance();renderPresence()}
+      toast("Données chargées depuis Google Sheets.","ok","fa-cloud-arrow-down");
+    } else {
+      toast("⚠️ Impossible de charger les données. Vérifiez le lien Google Sheets.","err","fa-triangle-exclamation");
+    }
+  }).catch(function(e){
+    console.warn("Chargement impossible :",e);
+    toast("⚠️ Connexion à Google Sheets impossible. Les données affichées sont locales.","err","fa-triangle-exclamation");
+  });
+}
 function envoyerPresence(){if(!state.session||!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1)return;var params=new URLSearchParams({action:"ping",sessionId:state.sessionId,code:state.session.code,role:state.session.role,nom:ROLE_LABEL[state.session.role],lastSeen:new Date().toISOString()});fetch(API_URL+"?"+params.toString()).then(function(r){return r.json()}).then(function(j){if(j.ok&&j.connexions){state.connexions=j.connexions;renderPresence()}}).catch(function(e){console.warn("Présence impossible :",e)})}
 var RENDER={dashboard:renderDashboard,membres:renderMembres,cotisations:renderCotisations,depenses:renderDepenses,projets:renderProjets,activites:renderActivites,journal:renderJournal,codes:renderCodes,config:renderConfig};
 function renderPanel(name){document.getElementById("panel-"+name).innerHTML=RENDER[name]();if(name==="projets")requestAnimationFrame(function(){document.querySelectorAll(".prog span").forEach(function(b){b.style.width=b.dataset.w})})}
