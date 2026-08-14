@@ -246,6 +246,7 @@ function copyText(t){if(!t){toast("Aucun code à copier.","err");return}if(navig
 window.addEventListener("beforeunload",function(){clearTimeout(_saveTimer);sauvegarder()});
 document.addEventListener("visibilitychange",function(){if(document.hidden){clearTimeout(_saveTimer);sauvegarder()}});
 document.getElementById("loginCode").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();doLogin(e.target.value.trim())}});
+chargerDepuisSheet();
 </script>
 </body>
 </html>
