@@ -176,7 +176,7 @@ function renderNav(){document.getElementById("sideNav").innerHTML=TABS.filter(fu
 function renderSideBalance(){document.getElementById("sideBalance").textContent=fmt(solde())}
 function renderTopbar(){document.getElementById("todayChip").textContent=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});var r=role();document.getElementById("roleBadge").className="chip role-badge role-"+r;document.getElementById("roleBadge").innerHTML='<i class="fa-solid fa-shield-halved"></i><span>'+ROLE_LABEL[r]+'</span>';var cc=document.getElementById("codeChip");cc.textContent=MASK;cc.dataset.revealed="";var eye=document.getElementById("codeChipEye");if(eye)eye.className="fa-regular fa-eye"}
 function resolveCode(code){if(code===ADMIN_CODE)return{role:"ADMIN",code:code};var c=state.codes.find(function(x){return x.code===code});return c?{role:c.role,code:code}:null}
-function doLogin(code){var s=resolveCode(code);var err=document.getElementById("loginErr");if(!s){err.classList.remove("show");void err.offsetWidth;err.classList.add("show");return}err.classList.remove("show");state.session=s;state.selection.clear();state.sessionId=uid();document.getElementById("loginScreen").hidden=true;document.getElementById("app").hidden=false;renderTopbar();renderSideBalance();chargerDepuisSheet();envoyerPresence();if(state.heartbeatId)clearInterval(state.heartbeatId);state.heartbeatId=setInterval(envoyerPresence,30000);goTo("dashboard");toast("Bienvenue, "+ROLE_LABEL[s.role]+" !","ok","fa-hand-sparkles")}
+function doLogin(code){var s=resolveCode(code);var err=document.getElementById("loginErr");if(!s){err.classList.remove("show");void err.offsetWidth;err.classList.add("show");return}err.classList.remove("show");state.session=s;state.selection.clear();state.sessionId=uid();document.getElementById("loginScreen").hidden=true;document.getElementById("app").hidden=false;renderTopbar();renderSideBalance();envoyerPresence();if(state.heartbeatId)clearInterval(state.heartbeatId);state.heartbeatId=setInterval(envoyerPresence,30000);chargerDepuisSheet(function(){goTo("dashboard");toast("Bienvenue, "+ROLE_LABEL[s.role]+" !","ok","fa-hand-sparkles")})}
 function logout(){clearTimeout(_saveTimer);sauvegarder();if(state.heartbeatId){clearInterval(state.heartbeatId);state.heartbeatId=null}state.session=null;state.sessionId=null;state.connexions=[];document.getElementById("app").hidden=true;document.getElementById("loginScreen").hidden=false;document.getElementById("loginCode").value=""}
 function renderPresence(){var c=document.getElementById("presenceCount");if(c)c.textContent=state.connexions.length;var w=document.getElementById("dashPresenceWrap");if(w)w.innerHTML=presenceCardHTML()}
 function presenceCardHTML(){var items=state.connexions.map(function(c){return '<li><span class="f-ico tone-ok"><i class="fa-solid fa-user"></i></span><div><span class="f-txt"><b>'+esc(c.nom)+'</b></span><span class="f-time">Connecté · '+timeAgo(c.lastSeen)+'</span></div></li>'}).join("");return '<div class="card"><div class="card-h"><h3><i class="fa-solid fa-signal"></i> Personnes connectées ('+state.connexions.length+')</h3></div><ul class="feed">'+(items||'<li style="border:none;padding:16px 0"><span class="empty-hint">Personne d\'autre n\'est connecté actuellement.</span></li>')+'</ul></div>'}
@@ -208,21 +208,29 @@ function tablesPourSheet(){return{MEMBRES:state.members,COTISATIONS:state.cotisa
 function appliquerDonnees(d){if(d.MEMBRES&&d.MEMBRES.length)state.members=d.MEMBRES;if(d.COTISATIONS&&d.COTISATIONS.length)state.cotisations=d.COTISATIONS.map(function(c){return Object.assign({},c,{montant:Number(c.montant)||0})});if(d.DEPENSES&&d.DEPENSES.length)state.depenses=d.DEPENSES.map(function(x){return Object.assign({},x,{montant:Number(x.montant)||0})});if(d.PROJETS&&d.PROJETS.length)state.projets=d.PROJETS.map(function(p){return Object.assign({},p,{avancement:Number(p.avancement)||0})});if(d.DEMANDES&&d.DEMANDES.length)state.demandes=d.DEMANDES;if(d.CODES&&d.CODES.length)state.codes=d.CODES;if(d.JOURNAL&&d.JOURNAL.length)state.log=d.JOURNAL}
 var _saveTimer=null;function planifierSauvegarde(){if(!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1)return;clearTimeout(_saveTimer);_saveTimer=setTimeout(sauvegarder,800)}
 function sauvegarder(){if(!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1)return;fetch(API_URL,{method:"POST",body:JSON.stringify({action:"saveAll",data:tablesPourSheet()})}).then(function(r){if(r.ok)console.log("✅ Sauvegardé")}).catch(function(e){console.warn("❌ Sauvegarde impossible",e)})}
-function chargerDepuisSheet(){
-  if(!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1)return;
+function chargerDepuisSheet(callback){
+  if(!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1){
+    if(callback)callback();
+    return;
+  }
   fetch(API_URL).then(function(r){return r.json()}).then(function(j){
     if(j.ok&&j.data){
       appliquerDonnees(j.data);
       if(j.data.CONNEXIONS)state.connexions=j.data.CONNEXIONS;
-      if(state.session){renderPanel(state.ui.tab);renderSideBalance();renderPresence()}
+      if(state.session){renderSideBalance();renderPresence()}
       toast("Données chargées depuis Google Sheets.","ok","fa-cloud-arrow-down");
+      console.log("✅ Données appliquées :",state.members.length,"membres");
     } else {
-      toast("⚠️ Impossible de charger les données. Vérifiez le lien Google Sheets.","err","fa-triangle-exclamation");
+      toast("⚠️ Données vides reçues de Google Sheets.","err");
+      console.warn("⚠️ Réponse vide :",j);
     }
+    if(callback)callback();
   }).catch(function(e){
-    console.warn("Chargement impossible :",e);
-    toast("⚠️ Connexion à Google Sheets impossible. Les données affichées sont locales.","err","fa-triangle-exclamation");
+    console.warn("❌ Chargement impossible :",e);
+    toast("⚠️ Connexion à Google Sheets impossible. Données locales affichées.","err");
+    if(callback)callback();
   });
+}
 }
 function envoyerPresence(){if(!state.session||!API_URL||API_URL.indexOf("COLLEZ_ICI")!==-1)return;var params=new URLSearchParams({action:"ping",sessionId:state.sessionId,code:state.session.code,role:state.session.role,nom:ROLE_LABEL[state.session.role],lastSeen:new Date().toISOString()});fetch(API_URL+"?"+params.toString()).then(function(r){return r.json()}).then(function(j){if(j.ok&&j.connexions){state.connexions=j.connexions;renderPresence()}}).catch(function(e){console.warn("Présence impossible :",e)})}
 var RENDER={dashboard:renderDashboard,membres:renderMembres,cotisations:renderCotisations,depenses:renderDepenses,projets:renderProjets,activites:renderActivites,journal:renderJournal,codes:renderCodes,config:renderConfig};
@@ -238,7 +246,6 @@ function copyText(t){if(!t){toast("Aucun code à copier.","err");return}if(navig
 window.addEventListener("beforeunload",function(){clearTimeout(_saveTimer);sauvegarder()});
 document.addEventListener("visibilitychange",function(){if(document.hidden){clearTimeout(_saveTimer);sauvegarder()}});
 document.getElementById("loginCode").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();doLogin(e.target.value.trim())}});
-chargerDepuisSheet();
 </script>
 </body>
 </html>
